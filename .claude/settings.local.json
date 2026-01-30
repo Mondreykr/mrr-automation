@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git init:*)",
+      "Bash(python:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nInitial commit: project setup and PDF extraction proof-of-concept\n\n- CLAUDE.md: Technical decisions and project documentation\n- Requirements doc from initial brainstorm session\n- pdf_test.html: Working proof-of-concept for PDF PN extraction using pdf.js\n- .gitignore: Exclude temp files and IDE configs\n\nTechnology decision: HTML/JS single-file app \\(not Python .exe\\)\nPDF extraction validated: Successfully extracts PNs from NetSuite PO PDFs\nMaterial parsing tested: 87% auto-match rate against known materials list\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd MRR Automation tool v1\n\nCore features implemented:\n- File loading UI for PO PDF, Flat BOM Excel, MRR Template Excel\n- PDF PN extraction using pdf.js\n- Excel reading using SheetJS\n- Cross-reference: matches PO PNs against Flat BOM\n- Material parsing: splits at last comma, validates against known materials\n- Review table with exclude checkboxes and editable material fields\n- Color code lookup from MRR Template Data sheet\n- Flags PNs found in PO but not in BOM\n- Export to Excel with MRR format\n\nReady for user GUI validation.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd Reset button and show descriptions for not-found PNs\n\n- Extract PN + description from PDF Part Number/Rev column\n- Smart duplicate detection to separate Part Number/Rev from Description column\n- Display descriptions for PNs not found in Flat BOM \\(e.g., \"1027730 - IMPACT TEST COUPON\"\\)\n- Add Reset button to clear all loaded files and start fresh\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)"
+    ]
+  },
+  "spinnerTipsEnabled": false
+}

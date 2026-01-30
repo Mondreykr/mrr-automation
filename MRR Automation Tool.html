@@ -1,0 +1,1367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MRR Automation Tool</title>
+    <!-- PDF.js for PDF parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- SheetJS for Excel reading (BOM files) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- ExcelJS for template handling (preserves formatting) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        .subtitle {
+            color: #7f8c8d;
+            margin-bottom: 20px;
+        }
+
+        /* File Input Section */
+        .file-inputs {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .file-box {
+            background: white;
+            border: 2px dashed #bdc3c7;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .file-box:hover {
+            border-color: #3498db;
+            background: #f8f9fa;
+        }
+        .file-box.loaded {
+            border-color: #27ae60;
+            border-style: solid;
+            background: #e8f8f0;
+        }
+        .file-box.dragover {
+            border-color: #3498db;
+            background: #ebf5fb;
+        }
+        .file-box h3 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+        }
+        .file-box p {
+            margin: 0;
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        .file-box .filename {
+            color: #27ae60;
+            font-weight: bold;
+            word-break: break-all;
+        }
+        .file-box input {
+            display: none;
+        }
+        .file-icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        /* Process Button */
+        .actions {
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: #2980b9;
+        }
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+        .btn-success:hover:not(:disabled) {
+            background: #219a52;
+        }
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+        .btn-secondary:hover:not(:disabled) {
+            background: #7f8c8d;
+        }
+
+        /* Status Messages */
+        .status {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .status.info {
+            background: #ebf5fb;
+            border: 1px solid #3498db;
+            color: #2980b9;
+            display: block;
+        }
+        .status.success {
+            background: #e8f8f0;
+            border: 1px solid #27ae60;
+            color: #1e8449;
+            display: block;
+        }
+        .status.warning {
+            background: #fef9e7;
+            border: 1px solid #f39c12;
+            color: #9a7b0a;
+            display: block;
+        }
+        .status.error {
+            background: #fdedec;
+            border: 1px solid #e74c3c;
+            color: #c0392b;
+            display: block;
+        }
+
+        /* Results Table */
+        .results-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: none;
+        }
+        .results-section.visible {
+            display: block;
+        }
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .results-header h2 {
+            margin: 0;
+            color: #2c3e50;
+        }
+        .results-stats {
+            color: #7f8c8d;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        th {
+            background: #2c3e50;
+            color: white;
+            padding: 12px 8px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+        }
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        tr.excluded {
+            background: #fdedec;
+            opacity: 0.6;
+        }
+        tr.not-found {
+            background: #fef9e7;
+        }
+
+        /* Split row highlighting - alternating colors for grouped rows */
+        tr.split-group-0 { background: #e8f4f8; }  /* Light blue */
+        tr.split-group-1 { background: #f8f4e8; }  /* Light yellow */
+        tr.split-group-2 { background: #f4e8f8; }  /* Light purple */
+        tr.split-group-3 { background: #e8f8e8; }  /* Light green */
+        tr.split-group-4 { background: #f8e8e8; }  /* Light red */
+        tr.split-group-0:hover, tr.split-group-1:hover, tr.split-group-2:hover,
+        tr.split-group-3:hover, tr.split-group-4:hover { filter: brightness(0.97); }
+
+        /* Split input styling */
+        .split-input {
+            width: 50px;
+            text-align: center;
+            padding: 4px;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .split-input:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        /* Qty input for split rows */
+        .qty-input {
+            width: 60px;
+            text-align: center;
+            padding: 4px;
+            border: 1px solid #3498db;
+            border-radius: 4px;
+            font-size: 13px;
+            background: #ebf5fb;
+        }
+        .qty-input:focus {
+            outline: none;
+            border-color: #2980b9;
+        }
+
+        /* Overflow warning banner */
+        .overflow-warning {
+            background: #fef9e7;
+            border: 1px solid #f39c12;
+            color: #9a7b0a;
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .overflow-warning .icon { font-size: 20px; }
+
+        /* Editable cells */
+        td input[type="text"] {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        td input[type="text"]:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        td input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        /* Color code badges */
+        .color-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        /* Table container for scroll */
+        .table-container {
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid #ecf0f1;
+            border-radius: 4px;
+        }
+
+        /* Not found section */
+        .not-found-section {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fef9e7;
+            border-radius: 6px;
+            border: 1px solid #f39c12;
+        }
+        .not-found-section h3 {
+            margin: 0 0 10px 0;
+            color: #9a7b0a;
+        }
+        .not-found-list {
+            margin: 0;
+            padding-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MRR Automation Tool</h1>
+        <p class="subtitle">Load PO, Flat BOM, and MRR Template to generate Material Receiving Report</p>
+
+        <!-- File Inputs -->
+        <div class="file-inputs">
+            <div class="file-box" id="poBox">
+                <div class="file-icon">📄</div>
+                <h3>PO PDF</h3>
+                <p id="poStatus">Drop PDF or click to browse</p>
+                <input type="file" id="poInput" accept=".pdf">
+            </div>
+
+            <div class="file-box" id="bomBox">
+                <div class="file-icon">📊</div>
+                <h3>Flat BOM Excel</h3>
+                <p id="bomStatus">Drop Excel or click to browse</p>
+                <input type="file" id="bomInput" accept=".xlsx,.xls">
+            </div>
+
+            <div class="file-box" id="templateBox">
+                <div class="file-icon">📋</div>
+                <h3>MRR Template</h3>
+                <p id="templateStatus">Drop Excel or click to browse</p>
+                <input type="file" id="templateInput" accept=".xlsx,.xls">
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions">
+            <button class="btn-primary" id="processBtn" disabled>Process Files</button>
+            <button class="btn-success" id="exportBtn" disabled style="margin-left: 10px;">Export MRR</button>
+            <button class="btn-secondary" id="resetBtn" style="margin-left: 10px;">Reset</button>
+        </div>
+
+        <!-- Status -->
+        <div class="status" id="statusBox"></div>
+
+        <!-- Results -->
+        <div class="results-section" id="resultsSection">
+            <div class="results-header">
+                <h2>Review Data</h2>
+                <div class="results-stats" id="resultsStats"></div>
+            </div>
+
+            <div class="overflow-warning" id="overflowWarning" style="display:none;">
+                <span class="icon">⚠️</span>
+                <span id="overflowText">Additional MRR sheets will be created for overflow rows.</span>
+            </div>
+
+            <div class="table-container">
+                <table id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;">Excl.</th>
+                            <th style="width:60px;">Qty</th>
+                            <th style="width:60px;">Split</th>
+                            <th style="width:90px;">Part #</th>
+                            <th>Product Description</th>
+                            <th style="width:180px;">Material Spec.</th>
+                            <th style="width:80px;">Color</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody">
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="not-found-section" id="notFoundSection" style="display:none;">
+                <h3>⚠️ PNs in PO but not found in Flat BOM:</h3>
+                <ul class="not-found-list" id="notFoundList"></ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Set worker path for pdf.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // State
+        let poData = null;          // Extracted PNs from PO
+        let bomData = null;         // Flat BOM rows
+        let materialsLookup = {};   // Material -> Color mapping from template (key: uppercase material)
+        let normalizedLookup = {};  // Normalized material -> canonical { material, color } (key: stripped alphanumeric)
+        let canonicalMaterials = []; // List of canonical material names for data validation
+        let templateWorkbook = null; // ExcelJS workbook for cloning (preserves formatting)
+        let processedData = [];     // Final processed rows for display/export
+        let notFoundPNs = [];       // PNs in PO but not in BOM
+        let splitGroupCounter = 0;  // Counter for split group IDs
+
+        // Constants
+        const ROWS_PER_SHEET = 16;  // MRR sheet has 16 data rows (rows 6-21)
+        const DATA_START_ROW = 6;   // First data row in MRR sheet (1-indexed)
+
+        // DOM Elements
+        const poBox = document.getElementById('poBox');
+        const bomBox = document.getElementById('bomBox');
+        const templateBox = document.getElementById('templateBox');
+        const poInput = document.getElementById('poInput');
+        const bomInput = document.getElementById('bomInput');
+        const templateInput = document.getElementById('templateInput');
+        const processBtn = document.getElementById('processBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const statusBox = document.getElementById('statusBox');
+        const resultsSection = document.getElementById('resultsSection');
+        const resultsBody = document.getElementById('resultsBody');
+        const resultsStats = document.getElementById('resultsStats');
+        const notFoundSection = document.getElementById('notFoundSection');
+        const notFoundList = document.getElementById('notFoundList');
+
+        // File box click handlers
+        poBox.addEventListener('click', () => poInput.click());
+        bomBox.addEventListener('click', () => bomInput.click());
+        templateBox.addEventListener('click', () => templateInput.click());
+
+        // Setup drag and drop for all boxes
+        setupDragDrop(poBox, poInput, handlePOFile, 'poStatus');
+        setupDragDrop(bomBox, bomInput, handleBOMFile, 'bomStatus');
+        setupDragDrop(templateBox, templateInput, handleTemplateFile, 'templateStatus');
+
+        // File input change handlers
+        poInput.addEventListener('change', (e) => handlePOFile(e.target.files[0]));
+        bomInput.addEventListener('change', (e) => handleBOMFile(e.target.files[0]));
+        templateInput.addEventListener('change', (e) => handleTemplateFile(e.target.files[0]));
+
+        // Button handlers
+        processBtn.addEventListener('click', processFiles);
+        exportBtn.addEventListener('click', exportMRR);
+        resetBtn.addEventListener('click', resetAll);
+
+        function setupDragDrop(box, input, handler, statusId) {
+            box.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                box.classList.add('dragover');
+            });
+            box.addEventListener('dragleave', () => {
+                box.classList.remove('dragover');
+            });
+            box.addEventListener('drop', (e) => {
+                e.preventDefault();
+                box.classList.remove('dragover');
+                const file = e.dataTransfer.files[0];
+                if (file) {
+                    handler(file);
+                }
+            });
+        }
+
+        // Handle PO PDF
+        async function handlePOFile(file) {
+            if (!file) return;
+            try {
+                setStatus('info', 'Reading PO PDF...');
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+                const extractedPNs = [];  // Array of { pn: string, description: string }
+                const seenPNs = new Set();
+
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+
+                    // Extract 7-digit PNs with description after pipe
+                    // Stop at: date (M/D/YYYY), price (CAN $), or next PN
+                    // Pattern: 1013391 | Flange, RF, Heavy Barrel...
+                    const pnWithDescPattern = /(\d{7})\s*\|\s*(.+?)(?=\s+\d{1,2}\/\d{1,2}\/\d{4}|\s+CAN\s*\$|\s+USD\s*\$|\s+\d{7}\s*\|)/gi;
+                    let match;
+                    while ((match = pnWithDescPattern.exec(pageText)) !== null) {
+                        const pn = match[1];
+                        let desc = cleanPODescription(match[2]);
+                        if (!seenPNs.has(pn)) {
+                            seenPNs.add(pn);
+                            extractedPNs.push({ pn: pn, description: desc });
+                        }
+                    }
+
+                    // Fallback: 7-digit numbers starting with 10 (without description)
+                    const altPattern = /\b(10\d{5})\b/g;
+                    while ((match = altPattern.exec(pageText)) !== null) {
+                        if (!seenPNs.has(match[1])) {
+                            seenPNs.add(match[1]);
+                            extractedPNs.push({ pn: match[1], description: '' });
+                        }
+                    }
+                }
+
+                poData = extractedPNs;
+                poBox.classList.add('loaded');
+                document.getElementById('poStatus').innerHTML = `<span class="filename">${file.name}</span><br>${extractedPNs.length} PNs found`;
+                setStatus('success', `PO loaded: ${extractedPNs.length} part numbers extracted`);
+                checkReady();
+            } catch (error) {
+                setStatus('error', 'Error reading PO: ' + error.message);
+            }
+        }
+
+        // Clean up description extracted from PO PDF
+        // The PDF has Part Number/Rev column followed by Description column
+        // When pdf.js extracts text, both get concatenated
+        // Description column often repeats the item name before adding details
+        // Example: "IMPACT TEST COUPON IMPACT TEST COUPON - 2.0000" NOM..."
+        // We want only: "IMPACT TEST COUPON"
+        function cleanPODescription(desc) {
+            if (!desc) return '';
+            desc = desc.trim();
+
+            const words = desc.split(/\s+/);
+            if (words.length < 4) return desc; // Too short to have duplication
+
+            // Try different starting phrase lengths (2-5 words)
+            // Look for where that phrase repeats (start of Description column)
+            for (let phraseLen = Math.min(5, Math.floor(words.length / 2)); phraseLen >= 2; phraseLen--) {
+                const startPhrase = words.slice(0, phraseLen).join(' ');
+                const searchFrom = startPhrase.length + 1; // Start searching after first occurrence
+
+                const secondIdx = desc.indexOf(startPhrase, searchFrom);
+
+                if (secondIdx !== -1) {
+                    // Found repetition - return text up to that point (Part Number/Rev content only)
+                    return desc.substring(0, secondIdx).replace(/\s+/g, ' ').trim();
+                }
+            }
+
+            // No repetition found - return as is (with cleaned whitespace)
+            return desc.replace(/\s+/g, ' ').trim();
+        }
+
+        // Handle Flat BOM Excel
+        async function handleBOMFile(file) {
+            if (!file) return;
+            try {
+                setStatus('info', 'Reading Flat BOM...');
+                const arrayBuffer = await file.arrayBuffer();
+                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                const data = XLSX.utils.sheet_to_json(sheet);
+
+                bomData = data;
+                bomBox.classList.add('loaded');
+                document.getElementById('bomStatus').innerHTML = `<span class="filename">${file.name}</span><br>${data.length} rows`;
+                setStatus('success', `Flat BOM loaded: ${data.length} rows`);
+                checkReady();
+            } catch (error) {
+                setStatus('error', 'Error reading BOM: ' + error.message);
+            }
+        }
+
+        // Handle MRR Template Excel (using ExcelJS to preserve formatting)
+        async function handleTemplateFile(file) {
+            if (!file) return;
+            try {
+                setStatus('info', 'Reading MRR Template...');
+                const arrayBuffer = await file.arrayBuffer();
+
+                // Use ExcelJS to read template (preserves all formatting)
+                const workbook = new ExcelJS.Workbook();
+                await workbook.xlsx.load(arrayBuffer);
+
+                // Store ExcelJS workbook for cloning during export
+                templateWorkbook = workbook;
+
+                // Validate required sheets exist
+                const sheetNames = workbook.worksheets.map(ws => ws.name);
+                const requiredSheets = ['MRR', 'Data sheet'];
+                const missingSheets = requiredSheets.filter(s => !sheetNames.includes(s));
+                if (missingSheets.length > 0) {
+                    throw new Error(`Template missing required sheets: ${missingSheets.join(', ')}`);
+                }
+
+                // Find Data sheet for materials lookup
+                const dataSheet = workbook.getWorksheet('Data sheet');
+
+                // Build materials lookups:
+                // 1. materialsLookup: uppercase material -> { material (canonical), color }
+                // 2. normalizedLookup: stripped alphanumeric -> { material (canonical), color }
+                // 3. canonicalMaterials: list of canonical material names for data validation
+                materialsLookup = {};
+                normalizedLookup = {};
+                canonicalMaterials = [];
+
+                dataSheet.eachRow((row, rowNumber) => {
+                    const material = row.getCell(1).value;
+                    const color = row.getCell(2).value;
+                    if (material && color) {
+                        const matStr = String(material).trim();
+                        const colorStr = String(color).trim();
+                        const canonicalEntry = { material: matStr, color: colorStr };
+
+                        // Store in uppercase lookup (for exact matching)
+                        materialsLookup[matStr.toUpperCase()] = canonicalEntry;
+
+                        // Store in normalized lookup (for fuzzy matching)
+                        // Normalize: uppercase, remove all non-alphanumeric
+                        const normalized = matStr.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                        normalizedLookup[normalized] = canonicalEntry;
+
+                        // Store canonical material name for data validation dropdown
+                        canonicalMaterials.push(matStr);
+                    }
+                });
+
+                templateBox.classList.add('loaded');
+                document.getElementById('templateStatus').innerHTML = `<span class="filename">${file.name}</span><br>${Object.keys(materialsLookup).length} materials`;
+                setStatus('success', `Template loaded: ${Object.keys(materialsLookup).length} materials in lookup`);
+                checkReady();
+            } catch (error) {
+                setStatus('error', 'Error reading template: ' + error.message);
+                console.error('Template load error:', error);
+            }
+        }
+
+        function checkReady() {
+            processBtn.disabled = !(poData && bomData && Object.keys(materialsLookup).length > 0);
+        }
+
+        // Reset all loaded files and data
+        function resetAll() {
+            // Clear data
+            poData = null;
+            bomData = null;
+            materialsLookup = {};
+            normalizedLookup = {};
+            canonicalMaterials = [];
+            templateWorkbook = null;
+            processedData = [];
+            notFoundPNs = [];
+            splitGroupCounter = 0;
+
+            // Reset file boxes
+            poBox.classList.remove('loaded');
+            bomBox.classList.remove('loaded');
+            templateBox.classList.remove('loaded');
+            document.getElementById('poStatus').textContent = 'Drop PDF or click to browse';
+            document.getElementById('bomStatus').textContent = 'Drop Excel or click to browse';
+            document.getElementById('templateStatus').textContent = 'Drop Excel or click to browse';
+
+            // Clear file inputs
+            poInput.value = '';
+            bomInput.value = '';
+            templateInput.value = '';
+
+            // Hide results
+            resultsSection.classList.remove('visible');
+            resultsBody.innerHTML = '';
+            notFoundSection.style.display = 'none';
+            document.getElementById('overflowWarning').style.display = 'none';
+
+            // Disable buttons
+            processBtn.disabled = true;
+            exportBtn.disabled = true;
+
+            // Clear status
+            statusBox.className = 'status';
+            statusBox.textContent = '';
+        }
+
+        function setStatus(type, message) {
+            statusBox.className = 'status ' + type;
+            statusBox.textContent = message;
+        }
+
+        // Main processing logic
+        function processFiles() {
+            setStatus('info', 'Processing...');
+            processedData = [];
+            notFoundPNs = [];  // Array of { pn, description } for PNs not found in BOM
+            splitGroupCounter = 0;
+
+            // Create lookup from BOM by Part Number
+            const bomLookup = {};
+            bomData.forEach(row => {
+                const pn = String(row['Part Number'] || '').trim();
+                if (pn) {
+                    bomLookup[pn] = row;
+                }
+            });
+
+            // Process each PN from PO (poData is array of { pn, description })
+            poData.forEach(item => {
+                const bomRow = bomLookup[item.pn];
+                if (bomRow) {
+                    const description = String(bomRow['Description'] || '');
+                    const { productDesc, material, color, materialMatched } = parseMaterial(description);
+
+                    processedData.push({
+                        excluded: false,
+                        qty: bomRow['Qty'] || 1,
+                        partNumber: item.pn,
+                        productDescription: productDesc,
+                        materialSpec: material,
+                        color: color,
+                        materialMatched: materialMatched,
+                        splitCount: 1,        // V2: Number of rows to create (default 1)
+                        splitGroupId: null,   // V2: Links split rows for highlighting
+                        isSplitChild: false   // V2: True for rows created from split
+                    });
+                } else {
+                    // Include PN and description from PO for items not found in BOM
+                    notFoundPNs.push({ pn: item.pn, description: item.description });
+                }
+            });
+
+            // Render results
+            renderResults();
+            updateRowCountDisplay();
+
+            resultsSection.classList.add('visible');
+            exportBtn.disabled = processedData.length === 0;
+        }
+
+        // Material parsing logic
+        function parseMaterial(description) {
+            if (!description) {
+                return { productDesc: '', material: '', color: '', materialMatched: false };
+            }
+
+            // Split at last comma
+            const lastCommaIdx = description.lastIndexOf(',');
+            if (lastCommaIdx === -1) {
+                return { productDesc: description, material: '', color: '', materialMatched: false };
+            }
+
+            const beforeComma = description.substring(0, lastCommaIdx).trim();
+            const afterComma = description.substring(lastCommaIdx + 1).trim();
+
+            // Filter out non-materials (dimensions, ratings, etc.)
+            const nonMaterialPatterns = [
+                /"\s*ID$/i,
+                /"\s*OD$/i,
+                /"\s*NPS$/i,
+                /lb\s*WLL$/i,
+                /^\d+\s*lb/i,
+                /^\d+["']?\s*(Lg|Long)$/i
+            ];
+
+            for (const pattern of nonMaterialPatterns) {
+                if (pattern.test(afterComma)) {
+                    return { productDesc: description, material: '', color: '', materialMatched: false };
+                }
+            }
+
+            // Try to match material - use CANONICAL value from Data sheet
+            const matched = matchMaterial(afterComma);
+            if (matched) {
+                return {
+                    productDesc: beforeComma,
+                    material: matched.material,  // Use canonical value for VLOOKUP compatibility
+                    color: matched.color,
+                    materialMatched: true
+                };
+            }
+
+            // No match - still split but flag as unmatched (keep original for user review)
+            return {
+                productDesc: beforeComma,
+                material: afterComma,  // Keep original - user can manually correct
+                color: '',
+                materialMatched: false
+            };
+        }
+
+        // Normalize a material string for matching
+        // Removes spaces, periods, dashes, etc. - keeps only alphanumeric
+        function normalizeMaterial(str) {
+            return str.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        }
+
+        // Match material against lookup - returns CANONICAL value from Data sheet
+        // This ensures the VLOOKUP in Column I will work correctly
+        function matchMaterial(candidate) {
+            if (!candidate) return null;
+
+            const candidateUpper = candidate.toUpperCase().trim();
+            const candidateNorm = normalizeMaterial(candidate);
+
+            // 1. Try exact match first (uppercase)
+            if (materialsLookup[candidateUpper]) {
+                return materialsLookup[candidateUpper];
+            }
+
+            // 2. Try normalized exact match
+            if (normalizedLookup[candidateNorm]) {
+                return normalizedLookup[candidateNorm];
+            }
+
+            // 3. Try fuzzy match - check if candidate contains or is contained by any known material
+            for (const [normalizedKey, canonicalEntry] of Object.entries(normalizedLookup)) {
+                // Check if one contains the other (for partial matches)
+                if (candidateNorm.includes(normalizedKey) || normalizedKey.includes(candidateNorm)) {
+                    // Only match if the difference is small (avoid false positives)
+                    const lenDiff = Math.abs(candidateNorm.length - normalizedKey.length);
+                    if (lenDiff <= 3) {
+                        return canonicalEntry;
+                    }
+                }
+
+                // Handle SA/A prefix variations (SA516-70N vs A516-70N)
+                const candidateWithoutSA = candidateNorm.replace(/^SA/, '');
+                const keyWithoutSA = normalizedKey.replace(/^SA/, '');
+                if (candidateWithoutSA === keyWithoutSA) {
+                    return canonicalEntry;
+                }
+
+                // Handle CSA prefix variations (CSA G40.21 vs G40.21)
+                const candidateWithoutCSA = candidateNorm.replace(/^CSA/, '');
+                const keyWithoutCSA = normalizedKey.replace(/^CSA/, '');
+                if (candidateWithoutCSA === keyWithoutCSA) {
+                    return canonicalEntry;
+                }
+            }
+
+            return null;
+        }
+
+        // Render results table
+        function renderResults() {
+            resultsBody.innerHTML = '';
+
+            processedData.forEach((row, idx) => {
+                const tr = document.createElement('tr');
+                if (row.excluded) tr.classList.add('excluded');
+                // Add split group highlighting
+                if (row.splitGroupId !== null) {
+                    tr.classList.add(`split-group-${row.splitGroupId % 5}`);
+                }
+
+                // Qty cell: editable for split rows (parent with splitCount > 1 or child), plain for others
+                let qtyCell;
+                if (row.isSplitChild || row.splitCount > 1) {
+                    qtyCell = `<input type="number" class="qty-input" value="${row.qty}" min="1" onchange="updateQty(${idx}, this.value)">`;
+                } else {
+                    qtyCell = row.qty;
+                }
+
+                // Split cell: input for parent rows only (not for split children)
+                let splitCell;
+                if (row.isSplitChild) {
+                    splitCell = '<span style="color:#bdc3c7">—</span>';
+                } else {
+                    splitCell = `<input type="number" class="split-input" value="${row.splitCount}" min="1" max="50" onchange="handleSplitChange(${idx}, this.value)">`;
+                }
+
+                tr.innerHTML = `
+                    <td><input type="checkbox" ${row.excluded ? 'checked' : ''} onchange="toggleExclude(${idx}, this.checked)"></td>
+                    <td>${qtyCell}</td>
+                    <td>${splitCell}</td>
+                    <td>${row.partNumber}</td>
+                    <td>${escapeHtml(row.productDescription)}</td>
+                    <td><input type="text" value="${escapeHtml(row.materialSpec)}" onchange="updateMaterial(${idx}, this.value)" style="${row.materialMatched ? '' : 'border-color: #f39c12;'}"></td>
+                    <td>${row.color ? `<span class="color-badge" style="background:${getColorHex(row.color)};color:${getTextColor(row.color)}">${row.color}</span>` : '<span style="color:#bdc3c7">—</span>'}</td>
+                `;
+                resultsBody.appendChild(tr);
+            });
+
+            // Show not found PNs with descriptions
+            if (notFoundPNs.length > 0) {
+                notFoundSection.style.display = 'block';
+                notFoundList.innerHTML = notFoundPNs.map(item => {
+                    const desc = item.description ? ` - ${escapeHtml(item.description)}` : '';
+                    return `<li><strong>${item.pn}</strong>${desc}</li>`;
+                }).join('');
+            } else {
+                notFoundSection.style.display = 'none';
+            }
+        }
+
+        function toggleExclude(idx, excluded) {
+            const row = processedData[idx];
+            row.excluded = excluded;
+
+            // If this row has a split group, toggle all rows in the group
+            if (row.splitGroupId !== null) {
+                processedData.forEach(r => {
+                    if (r.splitGroupId === row.splitGroupId) {
+                        r.excluded = excluded;
+                    }
+                });
+            }
+
+            renderResults();
+            updateRowCountDisplay();
+        }
+
+        function updateMaterial(idx, value) {
+            const row = processedData[idx];
+
+            // Try to match and get canonical value
+            const matched = matchMaterial(value);
+
+            // Use canonical material if matched, otherwise keep user's input
+            const materialSpec = matched ? matched.material : value;
+            const color = matched ? matched.color : '';
+            const materialMatched = !!matched;
+
+            row.materialSpec = materialSpec;
+            row.color = color;
+            row.materialMatched = materialMatched;
+
+            // If this row has a split group, update all rows in the group
+            if (row.splitGroupId !== null) {
+                processedData.forEach(r => {
+                    if (r.splitGroupId === row.splitGroupId) {
+                        r.materialSpec = materialSpec;
+                        r.color = color;
+                        r.materialMatched = materialMatched;
+                    }
+                });
+            }
+
+            renderResults();
+            updateRowCountDisplay();
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function getColorHex(colorCode) {
+            const colors = {
+                'RED': '#e74c3c',
+                'LB': '#85c1e9',
+                'FO': '#e67e22',
+                'WHITE': '#ecf0f1',
+                'FG': '#27ae60',
+                'FP': '#8e44ad',
+                'YELLOW': '#f1c40f',
+                'Y': '#f1c40f',
+                'PURPLE': '#9b59b6',
+                '-': '#bdc3c7'
+            };
+            return colors[colorCode] || '#bdc3c7';
+        }
+
+        function getTextColor(colorCode) {
+            const darkText = ['WHITE', 'YELLOW', 'Y', 'LB'];
+            return darkText.includes(colorCode) ? '#2c3e50' : 'white';
+        }
+
+        // V2: Update quantity for split rows
+        function updateQty(idx, value) {
+            const qty = parseInt(value) || 1;
+            processedData[idx].qty = Math.max(1, qty);
+            renderResults();
+        }
+
+        // V2: Handle split count change
+        function handleSplitChange(idx, value) {
+            const count = Math.max(1, Math.min(50, parseInt(value) || 1));
+            const parentRow = processedData[idx];
+            const oldCount = parentRow.splitCount;
+
+            if (count === oldCount) return;
+
+            // Remove existing split children for this parent
+            if (parentRow.splitGroupId !== null) {
+                processedData = processedData.filter((r, i) => {
+                    if (i === idx) return true; // Keep the parent
+                    return r.splitGroupId !== parentRow.splitGroupId || !r.isSplitChild;
+                });
+            }
+
+            // Update parent split count
+            parentRow.splitCount = count;
+
+            if (count > 1) {
+                // Assign a group ID if not already set
+                if (parentRow.splitGroupId === null) {
+                    parentRow.splitGroupId = splitGroupCounter++;
+                }
+
+                // Find the new index of the parent (may have shifted after filter)
+                const parentIdx = processedData.indexOf(parentRow);
+
+                // Create child rows (count - 1, since parent is row 1)
+                const children = [];
+                for (let i = 1; i < count; i++) {
+                    children.push({
+                        excluded: parentRow.excluded,
+                        qty: parentRow.qty,  // User will adjust
+                        partNumber: parentRow.partNumber,
+                        productDescription: parentRow.productDescription,
+                        materialSpec: parentRow.materialSpec,
+                        color: parentRow.color,
+                        materialMatched: parentRow.materialMatched,
+                        splitCount: 1,
+                        splitGroupId: parentRow.splitGroupId,
+                        isSplitChild: true,
+                        parentIdx: parentIdx  // Reference to parent for tracking
+                    });
+                }
+
+                // Insert children after parent
+                processedData.splice(parentIdx + 1, 0, ...children);
+            } else {
+                // Reset to no split
+                parentRow.splitGroupId = null;
+            }
+
+            renderResults();
+            updateRowCountDisplay();
+        }
+
+        // V2: Update stats display with row count and sheet info
+        function updateRowCountDisplay() {
+            const expandedRows = getExpandedRows();
+            const includedCount = expandedRows.filter(r => !r.excluded).length;
+            const excludedCount = expandedRows.filter(r => r.excluded).length;
+            const matchedCount = processedData.filter(r => r.materialMatched && !r.isSplitChild).length;
+            const sheetsNeeded = Math.ceil(includedCount / ROWS_PER_SHEET);
+
+            let statsText = `${includedCount} rows to export`;
+            if (excludedCount > 0) {
+                statsText += ` | ${excludedCount} excluded`;
+            }
+            statsText += ` | ${matchedCount} materials auto-matched`;
+            if (sheetsNeeded > 1) {
+                statsText += ` | ${sheetsNeeded} MRR sheets`;
+            }
+
+            resultsStats.textContent = statsText;
+
+            // Show/hide overflow warning
+            const overflowWarning = document.getElementById('overflowWarning');
+            if (sheetsNeeded > 3) {
+                overflowWarning.style.display = 'flex';
+                document.getElementById('overflowText').textContent =
+                    `${includedCount} rows will require ${sheetsNeeded} MRR sheets. Additional sheets (MRR 4, 5, etc.) will be created automatically.`;
+            } else if (sheetsNeeded > 1) {
+                overflowWarning.style.display = 'flex';
+                document.getElementById('overflowText').textContent =
+                    `${includedCount} rows will be distributed across ${sheetsNeeded} MRR sheets (16 rows per sheet).`;
+            } else {
+                overflowWarning.style.display = 'none';
+            }
+
+            setStatus('success', `Processed: ${processedData.filter(r => !r.isSplitChild).length} items, ${notFoundPNs.length} PNs not found in BOM`);
+        }
+
+        // V2: Get all rows expanded (includes split rows)
+        function getExpandedRows() {
+            // processedData already contains split children inline
+            return processedData;
+        }
+
+        // V2: Clone workbook via write/read cycle (deep copy) - ExcelJS version
+        async function cloneWorkbook(wb) {
+            // Write to buffer then read back - preserves all formatting
+            const buffer = await wb.xlsx.writeBuffer();
+            const newWb = new ExcelJS.Workbook();
+            await newWb.xlsx.load(buffer);
+            return newWb;
+        }
+
+        // V2: Clone a sheet within ExcelJS workbook
+        // ExcelJS doesn't have built-in clone, so we copy cell by cell with styles
+        function cloneSheetExcelJS(wb, srcName, destName) {
+            const srcSheet = wb.getWorksheet(srcName);
+            if (!srcSheet) {
+                throw new Error(`Source sheet "${srcName}" not found`);
+            }
+
+            // Add new worksheet with same properties
+            const destSheet = wb.addWorksheet(destName, {
+                properties: { ...srcSheet.properties },
+                pageSetup: { ...srcSheet.pageSetup }
+            });
+
+            // Copy column widths
+            srcSheet.columns.forEach((col, idx) => {
+                if (col.width) {
+                    destSheet.getColumn(idx + 1).width = col.width;
+                }
+                if (col.style) {
+                    destSheet.getColumn(idx + 1).style = { ...col.style };
+                }
+            });
+
+            // Copy all rows with styles
+            srcSheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+                const destRow = destSheet.getRow(rowNumber);
+                destRow.height = row.height;
+
+                row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                    const destCell = destRow.getCell(colNumber);
+
+                    // Copy value
+                    if (cell.formula) {
+                        destCell.value = { formula: cell.formula, result: cell.result };
+                    } else {
+                        destCell.value = cell.value;
+                    }
+
+                    // Copy style (font, fill, border, alignment, etc.)
+                    if (cell.style) {
+                        destCell.style = JSON.parse(JSON.stringify(cell.style));
+                    }
+                });
+
+                destRow.commit();
+            });
+
+            // Copy merged cells
+            srcSheet.model.merges.forEach(merge => {
+                destSheet.mergeCells(merge);
+            });
+
+            return destSheet;
+        }
+
+        // V2: Distribute rows into chunks of ROWS_PER_SHEET
+        function distributeRows(rows, perSheet) {
+            const chunks = [];
+            for (let i = 0; i < rows.length; i += perSheet) {
+                chunks.push(rows.slice(i, i + perSheet));
+            }
+            return chunks;
+        }
+
+        // V2: Populate an ExcelJS MRR sheet with data rows
+        // Writes to columns A, F, G, H (rows 6-21), leaves other columns intact
+        function populateSheetExcelJS(sheet, rows, startRow) {
+            // Column mapping: ExcelJS uses 1-based column numbers
+            // A=1 (Qty), B=2 (Circ), C=3 (Diam), D=4 (Thickness), E=5 (Heat #)
+            // F=6 (Product Desc), G=7 (Material Spec), H=8 (Part #), I=9 (Color Code)
+            const colMap = {
+                1: 'qty',           // Column A
+                // 2-5: Leave blank (Circ, Diam, Thickness, Heat #)
+                6: 'productDescription',  // Column F
+                7: 'materialSpec',        // Column G
+                8: 'partNumber'           // Column H
+                // 9: Column I has VLOOKUP formula - leave intact
+            };
+
+            rows.forEach((row, i) => {
+                const excelRow = startRow + i;
+                const sheetRow = sheet.getRow(excelRow);
+
+                // Write each mapped column while preserving cell styles
+                for (const [col, field] of Object.entries(colMap)) {
+                    const colNum = parseInt(col);
+                    const cell = sheetRow.getCell(colNum);
+
+                    if (row[field] !== undefined && row[field] !== null && row[field] !== '') {
+                        // Preserve existing style, just update value
+                        cell.value = row[field];
+                    }
+                }
+
+                sheetRow.commit();
+            });
+        }
+
+        // V2: Create Processed Data sheet with all rows (audit trail) - ExcelJS version
+        function createProcessedDataSheetExcelJS(wb, allRows) {
+            const ws = wb.addWorksheet('Processed Data');
+
+            // Set column widths
+            ws.columns = [
+                { header: 'Qty', key: 'qty', width: 8 },
+                { header: 'Part #', key: 'partNumber', width: 12 },
+                { header: 'Product Description', key: 'productDescription', width: 50 },
+                { header: 'Material Spec.', key: 'materialSpec', width: 20 },
+                { header: 'Color Code', key: 'color', width: 12 },
+                { header: 'Excluded', key: 'excluded', width: 10 },
+                { header: 'Split Group', key: 'splitGroup', width: 12 }
+            ];
+
+            // Style header row
+            const headerRow = ws.getRow(1);
+            headerRow.font = { bold: true };
+            headerRow.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FF2C3E50' }
+            };
+            headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+            // Add data rows
+            allRows.forEach(row => {
+                ws.addRow({
+                    qty: row.qty,
+                    partNumber: row.partNumber,
+                    productDescription: row.productDescription,
+                    materialSpec: row.materialSpec,
+                    color: row.color || '',
+                    excluded: row.excluded ? 'Yes' : 'No',
+                    splitGroup: row.splitGroupId !== null ? row.splitGroupId + 1 : ''
+                });
+            });
+
+            // Add borders to all data cells
+            ws.eachRow((row, rowNumber) => {
+                row.eachCell((cell) => {
+                    cell.border = {
+                        top: { style: 'thin' },
+                        left: { style: 'thin' },
+                        bottom: { style: 'thin' },
+                        right: { style: 'thin' }
+                    };
+                });
+            });
+        }
+
+        // V2: Re-apply data validations to ALL MRR sheets (ExcelJS can't preserve cross-sheet validations)
+        // Also propagates F2 value from MRR sheet to all other sheets for consistency
+        // Applies dropdowns for:
+        //   - F2 (Rec'd By) referencing Data sheet Column D (names list)
+        //   - G6:G21 (Material Spec) referencing Data sheet Column A (materials list)
+        function applyDataValidations(wb) {
+            // Find ALL MRR sheets in the workbook (MRR, MRR 2, MRR 3, MRR 4, etc.)
+            const allMRRSheets = wb.worksheets
+                .filter(ws => ws.name === 'MRR' || ws.name.match(/^MRR \d+$/))
+                .map(ws => ws.name);
+
+            // Get F2 value from main MRR sheet to propagate to others
+            const mainMRR = wb.getWorksheet('MRR');
+            const f2Value = mainMRR ? mainMRR.getCell('F2').value : null;
+
+            allMRRSheets.forEach(sheetName => {
+                const sheet = wb.getWorksheet(sheetName);
+                if (!sheet) return;
+
+                // 1. Apply F2 dropdown (Rec'd By) - names list from Data sheet Column D
+                const f2Cell = sheet.getCell('F2');
+
+                // Propagate F2 value from main MRR sheet to ensure consistency
+                if (f2Value && !f2Cell.value) {
+                    f2Cell.value = f2Value;
+                }
+
+                f2Cell.dataValidation = {
+                    type: 'list',
+                    allowBlank: true,
+                    formulae: ["'Data sheet'!$D$1:$D$100"],
+                    showErrorMessage: true,
+                    errorStyle: 'warning',
+                    errorTitle: 'Invalid Name',
+                    error: 'Please select a name from the list.'
+                };
+
+                // 2. Apply G6:G21 dropdowns (Material Spec) - materials list from Data sheet Column A
+                for (let row = DATA_START_ROW; row <= DATA_START_ROW + ROWS_PER_SHEET - 1; row++) {
+                    const cell = sheet.getCell(`G${row}`);
+                    cell.dataValidation = {
+                        type: 'list',
+                        allowBlank: true,
+                        formulae: ["'Data sheet'!$A$1:$A$200"],
+                        showErrorMessage: true,
+                        errorStyle: 'warning',
+                        errorTitle: 'Invalid Material',
+                        error: 'Please select a material from the list or enter a valid material code.'
+                    };
+                }
+            });
+        }
+
+        // V2: Export to Excel - clone template and populate (ExcelJS version)
+        async function exportMRR() {
+            if (!templateWorkbook) {
+                setStatus('error', 'Template workbook not loaded. Please reload the MRR Template.');
+                return;
+            }
+
+            const allRows = getExpandedRows();
+            const includedRows = allRows.filter(r => !r.excluded);
+
+            if (includedRows.length === 0) {
+                setStatus('warning', 'No rows to export to MRR sheets (all excluded). Creating export with Processed Data only.');
+            }
+
+            try {
+                setStatus('info', 'Generating export file...');
+
+                // Clone the template workbook (preserves all formatting)
+                const wb = await cloneWorkbook(templateWorkbook);
+
+                // Calculate sheets needed
+                const sheetsNeeded = Math.max(1, Math.ceil(includedRows.length / ROWS_PER_SHEET));
+
+                // Get existing MRR sheets
+                const existingMRRSheets = wb.worksheets
+                    .filter(ws => ws.name === 'MRR' || ws.name.match(/^MRR \d+$/))
+                    .map(ws => ws.name);
+
+                // Create additional MRR sheets if needed (beyond existing ones)
+                // Note: Dynamically created sheets won't have logo/full formatting
+                const needsDynamicSheets = sheetsNeeded > existingMRRSheets.length;
+                for (let i = existingMRRSheets.length + 1; i <= sheetsNeeded; i++) {
+                    const newName = `MRR ${i}`;
+                    cloneSheetExcelJS(wb, 'MRR', newName);
+                }
+
+                if (needsDynamicSheets) {
+                    console.warn(`Created ${sheetsNeeded - existingMRRSheets.length} additional MRR sheet(s). These may lack logo and some formatting.`);
+                }
+
+                // Get ordered list of MRR sheets to populate
+                const mrrSheets = ['MRR'];
+                for (let i = 2; i <= sheetsNeeded; i++) {
+                    mrrSheets.push(`MRR ${i}`);
+                }
+
+                // Distribute and populate rows
+                const rowChunks = distributeRows(includedRows, ROWS_PER_SHEET);
+                rowChunks.forEach((chunk, i) => {
+                    const sheetName = mrrSheets[i];
+                    const sheet = wb.getWorksheet(sheetName);
+                    if (sheet) {
+                        populateSheetExcelJS(sheet, chunk, DATA_START_ROW);
+                    }
+                });
+
+                // Re-apply data validations (dropdowns) to ALL MRR sheets
+                // ExcelJS can't preserve cross-sheet validations, so we recreate them
+                // This applies F2 (Rec'd By) and G6:G21 (Material Spec) dropdowns
+                applyDataValidations(wb);
+
+                // Create Processed Data sheet (audit trail)
+                createProcessedDataSheetExcelJS(wb, allRows);
+
+                // Generate filename with date
+                const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                const filename = `MRR_Output_${date}.xlsx`;
+
+                // Write to buffer and download
+                const buffer = await wb.xlsx.writeBuffer();
+                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                const sheetInfo = sheetsNeeded > 1 ? ` across ${sheetsNeeded} MRR sheets` : '';
+                const dynamicNote = needsDynamicSheets ? ' (Note: extra sheets may lack logo)' : '';
+                setStatus('success', `Exported ${includedRows.length} rows${sheetInfo} to ${filename}${dynamicNote}`);
+            } catch (error) {
+                setStatus('error', 'Export failed: ' + error.message);
+                console.error('Export error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
